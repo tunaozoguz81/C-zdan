@@ -1,7 +1,7 @@
 const CACHE = 'cuzdan-v1';
 const ASSETS = [
-  '/cuzdan/index.html',
-  '/cuzdan/manifest.json',
+  '/C-zdan/index.html',
+  '/C-zdan/manifest.json',
 ];
 
 self.addEventListener('install', e => {
@@ -21,7 +21,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      caches.match('/cuzdan/index.html').then(cached => cached || fetch(e.request))
+      caches.match('/C-zdan/index.html').then(cached => cached || fetch(e.request))
     );
     return;
   }
