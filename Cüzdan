@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cüzdan</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Cüzdan">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *{-webkit-tap-highlight-color:transparent;box-sizing:border-box;}
+    body{background:#0f172a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:0;overscroll-behavior:none;}
+    .hide{display:none!important;}
+    .page{min-height:100dvh;padding-bottom:90px;}
+    header{background:#0a1120;border-bottom:1px solid #1e293b;position:sticky;top:0;z-index:40;padding:14px 16px;display:flex;align-items:center;}
+    .card{background:#1e293b;border-radius:14px;padding:16px;}
+    .bottom-nav{background:#0a1120;border-top:1px solid #1e293b;position:fixed;bottom:0;left:0;right:0;z-index:50;padding-bottom:env(safe-area-inset-bottom);}
+    .tab-active{border-bottom:2px solid #22c55e;color:#22c55e;}
+    input,select,textarea{background:#0f172a;color:#fff;border:1.5px solid #334155;border-radius:10px;padding:11px 14px;width:100%;outline:none;font-size:16px;}
+    input:focus,select:focus,textarea:focus{border-color:#22c55e;}
+    select option{background:#1e293b;}
+    textarea{resize:none;}
+    .btn-green{background:linear-gradient(135deg,#22c55e,#16a34a);border:none;cursor:pointer;color:#fff;font-weight:700;border-radius:12px;padding:14px;width:100%;font-size:15px;}
+    .btn-green:active{opacity:.85;}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:60;display:flex;align-items:flex-end;}
+    .modal-sheet{background:#1e293b;width:100%;border-radius:20px 20px 0 0;padding:20px 16px 40px;max-height:92dvh;overflow-y:auto;}
+    .label{display:block;font-size:.72rem;color:#94a3b8;margin-bottom:6px;}
+    .progress-bar{background:#0f172a;border-radius:99px;height:10px;overflow:hidden;}
+    .progress-fill{height:100%;border-radius:99px;transition:width .4s;}
+    ::-webkit-scrollbar{display:none;}
+    .chip{display:inline-flex;align-items:center;background:#1e293b;border:1.5px solid #334155;border-radius:99px;padding:6px 14px;font-size:13px;cursor:pointer;color:#94a3b8;}
+    .chip.active{border-color:#22c55e;color:#22c55e;background:#052e16;}
+  </style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const fmt = n => new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',minimumFractionDigits:0}).format(n||0);
+const today = () => new Date().toISOString().split('T')[0];
+const uid = () => '_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+const esc = t => String(t??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+const DB = {
+  _g(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch{ return null; } },
+  _s(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){ alert('Depolama alanı doldu!'); } },
+  init(){
+    if(!this._g('cz_expenses'))  this._s('cz_expenses',[]);
+    if(!this._g('cz_incomes'))   this._s('cz_incomes',[]);
+    if(!this._g('cz_debts'))     this._s('cz_debts',[]);
+    if(!this._g('cz_goals'))     this._s('cz_goals',[]);
+  },
+  expenses(){ return this._g('cz_expenses')||[]; },
+  addExpense(e){ const a=this.expenses(); e.id=uid(); a.unshift(e); this._s('cz_expenses',a); },
+  delExpense(id){ this._s('cz_expenses',this.expenses().filter(e=>e.id!==id)); },
+  incomes(){ return this._g('cz_incomes')||[]; },
+  addIncome(e){ const a=this.incomes(); e.id=uid(); a.unshift(e); this._s('cz_incomes',a); },
+  delIncome(id){ this._s('cz_incomes',this.incomes().filter(e=>e.id!==id)); },
+  debts(){ return this._g('cz_debts')||[]; },
+  addDebt(d){ const a=this.debts(); d.id=uid(); a.push(d); this._s('cz_debts',a); },
+  updateDebt(id,data){ const a=this.debts(); const i=a.findIndex(d=>d.id===id); if(i>=0){a[i]={...a[i],...data};this._s('cz_debts',a);} },
+  delDebt(id){ this._s('cz_debts',this.debts().filter(d=>d.id!==id)); },
+  goals(){ return this._g('cz_goals')||[]; },
+  addGoal(g){ const a=this.goals(); g.id=uid(); a.push(g); this._s('cz_goals',a); },
+  updateGoal(id,data){ const a=this.goals(); const i=a.findIndex(g=>g.id===id); if(i>=0){a[i]={...a[i],...data};this._s('cz_goals',a);} },
+  delGoal(id){ this._s('cz_goals',this.goals().filter(g=>g.id!==id)); },
+};
+
+const CATS = ['🍔 Yemek','☕ Kafe','🚗 Ulaşım','🛒 Market','👗 Giyim','💊 Sağlık','📱 Teknoloji','🎮 Eğlence','📚 Eğitim','🏠 Ev','💡 Fatura','🎁 Hediye','✈️ Seyahat','💰 Diğer'];
+const MONTHS = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+let VIEW = 'dashboard', PARAMS = {}, _chart = null;
+
+function go(v,p={}){
+  if(_chart){ _chart.destroy(); _chart=null; }
+  VIEW=v; PARAMS=p; draw();
+}
+
+function draw(){
+  const map={dashboard:vDashboard,expenses:vExpenses,debts:vDebts,goals:vGoals};
+  document.getElementById('app').innerHTML=(map[VIEW]||vDashboard)();
+  afterDraw();
+}
+
+function navBar(active){
+  const tabs=[{v:'dashboard',i:'🏠',l:'Ana Sayfa'},{v:'expenses',i:'💸',l:'Harcama'},{v:'debts',i:'📋',l:'Borçlar'},{v:'goals',i:'🎯',l:'Hedefler'}];
+  return `<nav class="bottom-nav flex">${tabs.map(t=>`
+    <button onclick="go('${t.v}')" class="flex-1 flex flex-col items-center py-2 text-xs ${active===t.v?'text-green-400':'text-slate-500'}">
+      <span class="text-xl leading-none mb-0.5">${t.i}</span>${t.l}
+    </button>`).join('')}</nav>`;
+}
+
+function topBar(title,back=null){
+  const b=back?`<button onclick="go('${back}')" class="text-green-400 text-2xl leading-none mr-3 font-light">‹</button>`:'';
+  return `<header>${b}<span class="text-white font-bold text-lg flex-1">${esc(title)}</span></header>`;
+}
+
+function thisMonth(){
+  const now=new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+function vDashboard(){
+  const now=new Date();
+  const mon=thisMonth();
+  const expenses=DB.expenses().filter(e=>e.date.startsWith(mon));
+  const incomes=DB.incomes().filter(e=>e.date.startsWith(mon));
+  const totalExp=expenses.reduce((s,e)=>s+e.amount,0);
+  const totalInc=incomes.reduce((s,e)=>s+e.amount,0);
+  const balance=totalInc-totalExp;
+  const goals=DB.goals();
+  const debts=DB.debts();
+  const unpaidDebts=debts.filter(d=>!d.paid);
+
+  const catMap={};
+  expenses.forEach(e=>{ catMap[e.cat]=(catMap[e.cat]||0)+e.amount; });
+  const topCats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  return `
+  <div class="page">
+    ${topBar('')}
+    <div class="px-4 pt-5 space-y-4">
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <p class="text-slate-400 text-sm">${MONTHS[now.getMonth()]} ${now.getFullYear()}</p>
+          <h2 class="text-white text-xl font-bold">Finansal Özet</h2>
+        </div>
+        <span class="text-3xl">💰</span>
+      </div>
+
+      <div class="card" style="background:linear-gradient(135deg,${balance>=0?'#052e16,#14532d':'#450a0a,#7f1d1d'});">
+        <p class="text-slate-300 text-sm mb-1">Bu ay bakiye</p>
+        <p class="text-3xl font-black ${balance>=0?'text-green-300':'text-red-300'}">${fmt(balance)}</p>
+        <div class="flex gap-4 mt-3">
+          <div><p class="text-slate-400 text-xs">Gelir</p><p class="text-green-400 font-bold">${fmt(totalInc)}</p></div>
+          <div><p class="text-slate-400 text-xs">Gider</p><p class="text-red-400 font-bold">${fmt(totalExp)}</p></div>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="showAddModal('income')" class="flex-1 card flex flex-col items-center py-4 active:opacity-70">
+          <span class="text-3xl mb-1">➕</span>
+          <span class="text-white text-sm font-semibold">Gelir Ekle</span>
+        </button>
+        <button onclick="showAddModal('expense')" class="flex-1 card flex flex-col items-center py-4 active:opacity-70">
+          <span class="text-3xl mb-1">➖</span>
+          <span class="text-white text-sm font-semibold">Harcama Ekle</span>
+        </button>
+      </div>
+
+      ${topCats.length?`
+      <div class="card">
+        <p class="text-slate-400 text-xs mb-3 uppercase tracking-wide font-semibold">Bu Ay En Çok Harcama</p>
+        ${topCats.map(([cat,amt])=>{
+          const pct=Math.round((amt/totalExp)*100);
+          return `<div class="mb-3">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-white">${esc(cat)}</span>
+              <span class="text-slate-300 font-semibold">${fmt(amt)}</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill bg-green-500" style="width:${pct}%"></div></div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+
+      ${unpaidDebts.length?`
+      <div class="card border border-orange-800/50">
+        <p class="text-orange-400 text-sm font-semibold mb-2">⚠️ ${unpaidDebts.length} ödenmemiş borç</p>
+        ${unpaidDebts.slice(0,3).map(d=>`
+          <div class="flex justify-between py-2 border-b border-slate-700/40 last:border-0">
+            <span class="text-white text-sm">${esc(d.name)}</span>
+            <span class="text-orange-300 text-sm font-bold">${fmt(d.amount)}</span>
+          </div>`).join('')}
+        <button onclick="go('debts')" class="text-orange-400 text-xs mt-2 underline">Tümünü gör →</button>
+      </div>`:''}
+
+      ${goals.length?`
+      <div class="card">
+        <p class="text-slate-400 text-xs mb-3 uppercase tracking-wide font-semibold">Hedefler</p>
+        ${goals.map(g=>{
+          const pct=Math.min(100,Math.round((g.saved/g.target)*100));
+          return `<div class="mb-3 last:mb-0">
+            <div class="flex justify-between text-sm mb-1">
+              <span class="text-white">${esc(g.icon||'🎯')} ${esc(g.name)}</span>
+              <span class="text-slate-400 text-xs">${pct}%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${pct>=100?'#22c55e':'#3b82f6'}"></div></div>
+            <div class="flex justify-between text-xs text-slate-500 mt-1">
+              <span>${fmt(g.saved)}</span><span>${fmt(g.target)}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`:''}
+
+      ${expenses.length>0?`
+      <div class="card">
+        <p class="text-slate-400 text-xs mb-3 uppercase tracking-wide font-semibold">Son Harcamalar</p>
+        ${expenses.slice(0,5).map(e=>`
+          <div class="flex items-center justify-between py-2.5 border-b border-slate-700/40 last:border-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">${e.cat.split(' ')[0]}</span>
+              <div>
+                <p class="text-white text-sm">${esc(e.cat.split(' ').slice(1).join(' '))}</p>
+                <p class="text-slate-500 text-xs">${e.note?esc(e.note):e.date}</p>
+              </div>
+            </div>
+            <span class="text-red-400 font-bold text-sm">-${fmt(e.amount)}</span>
+          </div>`).join('')}
+        <button onclick="go('expenses')" class="text-green-400 text-xs mt-2 underline">Tümünü gör →</button>
+      </div>`:''}
+    </div>
+  </div>
+  ${navBar('dashboard')}
+  ${addModal()}`;
+}
+
+function addModal(){
+  return `
+  <div id="add-modal" class="hide modal-overlay">
+    <div class="modal-sheet">
+      <div class="flex justify-between items-center mb-5">
+        <h3 id="add-modal-title" class="text-white font-bold text-lg"></h3>
+        <button onclick="document.getElementById('add-modal').classList.add('hide')" class="text-slate-400 text-3xl leading-none">×</button>
+      </div>
+      <div class="space-y-3">
+        <div id="cat-row" class="hide">
+          <label class="label">Kategori</label>
+          <div class="flex flex-wrap gap-2 mb-2" id="cat-chips">
+            ${CATS.map(c=>`<button type="button" class="chip" onclick="selectCat(this,'${esc(c)}')">${c}</button>`).join('')}
+          </div>
+        </div>
+        <div id="inc-label-row" class="hide">
+          <label class="label">Açıklama</label>
+          <input id="add-note-inc" type="text" placeholder="Maaş, serbest iş...">
+        </div>
+        <div><label class="label">Tutar (₺)</label><input id="add-amount" type="number" inputmode="decimal" placeholder="0"></div>
+        <div><label class="label">Tarih</label><input id="add-date" type="date" value="${today()}"></div>
+        <div id="note-row" class="hide"><label class="label">Not (opsiyonel)</label><input id="add-note" type="text" placeholder="Açıklama..."></div>
+        <input type="hidden" id="add-type" value="">
+        <input type="hidden" id="add-cat-val" value="">
+        <button onclick="saveEntry()" class="btn-green mt-2">Kaydet</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showAddModal(type){
+  document.getElementById('add-modal').classList.remove('hide');
+  document.getElementById('add-type').value=type;
+  document.getElementById('add-modal-title').textContent=type==='expense'?'Harcama Ekle':'Gelir Ekle';
+  document.getElementById('cat-row').classList.toggle('hide',type!=='expense');
+  document.getElementById('note-row').classList.toggle('hide',type!=='expense');
+  document.getElementById('inc-label-row').classList.toggle('hide',type!=='income');
+  document.getElementById('add-amount').value='';
+  document.getElementById('add-cat-val').value='';
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+}
+
+function selectCat(el,cat){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('add-cat-val').value=cat;
+}
+
+function saveEntry(){
+  const type=document.getElementById('add-type').value;
+  const amount=parseFloat(document.getElementById('add-amount').value);
+  const date=document.getElementById('add-date').value||today();
+  if(!amount||amount<=0){ alert('Geçerli bir tutar girin.'); return; }
+  if(type==='expense'){
+    const cat=document.getElementById('add-cat-val').value||'💰 Diğer';
+    const note=document.getElementById('add-note').value.trim();
+    DB.addExpense({amount,date,cat,note});
+  } else {
+    const note=document.getElementById('add-note-inc').value.trim()||'Gelir';
+    DB.addIncome({amount,date,note});
+  }
+  document.getElementById('add-modal').classList.add('hide');
+  draw();
+}
+
+function vExpenses(){
+  const all=DB.expenses();
+  const allInc=DB.incomes();
+  const mon=thisMonth();
+  const [selYear,selMon]=mon.split('-');
+  return `
+  <div class="page">
+    ${topBar('Harcamalar & Gelir')}
+    <div class="px-4 pt-4 space-y-4">
+      <div class="flex gap-2">
+        <button onclick="showAddModal('expense')" class="flex-1 btn-green py-3 text-sm">+ Harcama</button>
+        <button onclick="showAddModal('income')" class="flex-1 py-3 text-sm font-bold rounded-xl border border-green-700 text-green-400 active:opacity-70">+ Gelir</button>
+      </div>
+
+      <div class="card">
+        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold mb-3">Gelirler</p>
+        ${!allInc.length?'<p class="text-slate-500 text-sm">Henüz gelir eklenmedi</p>':
+          allInc.map(e=>`
+          <div class="flex items-center justify-between py-2.5 border-b border-slate-700/40 last:border-0">
+            <div>
+              <p class="text-white text-sm font-semibold">${esc(e.note)}</p>
+              <p class="text-slate-500 text-xs">${e.date}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-green-400 font-bold">+${fmt(e.amount)}</span>
+              <button onclick="DB.delIncome('${e.id}');draw()" class="text-slate-600 text-xs">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+
+      <div class="card">
+        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold mb-3">Harcamalar</p>
+        ${!all.length?'<p class="text-slate-500 text-sm">Henüz harcama eklenmedi</p>':
+          all.map(e=>`
+          <div class="flex items-center justify-between py-2.5 border-b border-slate-700/40 last:border-0">
+            <div class="flex items-center gap-2">
+              <span class="text-xl">${e.cat.split(' ')[0]}</span>
+              <div>
+                <p class="text-white text-sm">${esc(e.cat.split(' ').slice(1).join(' '))}</p>
+                <p class="text-slate-500 text-xs">${e.note?esc(e.note)+' · ':''>${e.date}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-red-400 font-bold text-sm">-${fmt(e.amount)}</span>
+              <button onclick="DB.delExpense('${e.id}');draw()" class="text-slate-600 text-xs">✕</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+  ${navBar('expenses')}
+  ${addModal()}`;
+}
+
+function vDebts(){
+  const debts=DB.debts();
+  const totalUnpaid=debts.filter(d=>!d.paid).reduce((s,d)=>s+d.amount,0);
+  return `
+  <div class="page">
+    ${topBar('Borçlar')}
+    <div class="px-4 pt-4 space-y-4">
+      <button onclick="showDebtModal()" class="btn-green">+ Borç Ekle</button>
+
+      ${totalUnpaid>0?`
+      <div class="card" style="background:linear-gradient(135deg,#431407,#7c2d12)">
+        <p class="text-orange-300 text-sm">Toplam Ödenmemiş</p>
+        <p class="text-3xl font-black text-orange-300">${fmt(totalUnpaid)}</p>
+      </div>`:''}
+
+      ${!debts.length?`<div class="text-center py-16 text-slate-500">
+        <div class="text-6xl mb-3">📋</div>
+        <p>Henüz borç eklenmedi</p>
+      </div>`:`
+      <div class="space-y-3">
+        ${debts.map(d=>`
+        <div class="card ${d.paid?'opacity-60':''}">
+          <div class="flex items-start justify-between">
+            <div class="flex-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">${d.paid?'✅':'🔴'}</span>
+                <p class="text-white font-semibold">${esc(d.name)}</p>
+              </div>
+              <p class="text-slate-400 text-sm mt-1">${d.dueDay?'Her ayın '+d.dueDay+'. günü':''} ${d.note?'· '+esc(d.note):''}</p>
+            </div>
+            <div class="text-right">
+              <p class="text-white font-black text-lg">${fmt(d.amount)}</p>
+              <p class="text-slate-500 text-xs">${d.type==='monthly'?'Aylık':'Tek seferlik'}</p>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            ${!d.paid?`<button onclick="DB.updateDebt('${d.id}',{paid:true});draw()" class="flex-1 py-2 rounded-xl bg-green-900/40 border border-green-700/50 text-green-400 text-sm font-semibold">✓ Ödendi</button>`
+            :`<button onclick="DB.updateDebt('${d.id}',{paid:false});draw()" class="flex-1 py-2 rounded-xl bg-slate-700/40 text-slate-400 text-sm">Geri al</button>`}
+            <button onclick="DB.delDebt('${d.id}');draw()" class="py-2 px-4 rounded-xl bg-red-900/30 border border-red-800/50 text-red-400 text-sm">Sil</button>
+          </div>
+        </div>`).join('')}
+      </div>`}
+    </div>
+  </div>
+  ${navBar('debts')}
+  <div id="debt-modal" class="hide modal-overlay">
+    <div class="modal-sheet">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="text-white font-bold text-lg">Borç Ekle</h3>
+        <button onclick="document.getElementById('debt-modal').classList.add('hide')" class="text-slate-400 text-3xl leading-none">×</button>
+      </div>
+      <div class="space-y-3">
+        <div><label class="label">Borç Adı *</label><input id="d-name" type="text" placeholder="Kira, Netflix, Kredi taksiti..."></div>
+        <div><label class="label">Tutar (₺) *</label><input id="d-amount" type="number" inputmode="decimal" placeholder="0"></div>
+        <div><label class="label">Tür</label>
+          <select id="d-type">
+            <option value="monthly">Aylık sabit</option>
+            <option value="once">Tek seferlik</option>
+          </select>
+        </div>
+        <div><label class="label">Her ayın kaçında? (aylık için)</label><input id="d-day" type="number" min="1" max="31" placeholder="1-31"></div>
+        <div><label class="label">Not (opsiyonel)</label><input id="d-note" type="text" placeholder="Açıklama..."></div>
+        <button onclick="saveDebt()" class="btn-green mt-2">Kaydet</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function showDebtModal(){
+  document.getElementById('debt-modal').classList.remove('hide');
+}
+
+function saveDebt(){
+  const name=document.getElementById('d-name').value.trim();
+  const amount=parseFloat(document.getElementById('d-amount').value);
+  if(!name||!amount){ alert('Ad ve tutar zorunludur.'); return; }
+  DB.addDebt({
+    name, amount,
+    type:document.getElementById('d-type').value,
+    dueDay:parseInt(document.getElementById('d-day').value)||null,
+    note:document.getElementById('d-note').value.trim(),
+    paid:false,
+  });
+  document.getElementById('debt-modal').classList.add('hide');
+  draw();
+}
+
+function vGoals(){
+  const goals=DB.goals();
+  return `
+  <div class="page">
+    ${topBar('Hedefler')}
+    <div class="px-4 pt-4 space-y-4">
+      <button onclick="showGoalModal()" class="btn-green">+ Hedef Ekle</button>
+
+      ${!goals.length?`<div class="text-center py-16 text-slate-500">
+        <div class="text-6xl mb-3">🎯</div>
+        <p class="mb-1">Henüz hedef eklenmedi</p>
+        <p class="text-xs">Yaz tatili, araba, acil fon...</p>
+      </div>`:`
+      <div class="space-y-3">
+        ${goals.map(g=>{
+          const pct=Math.min(100,Math.round((g.saved/g.target)*100));
+          const rem=g.target-g.saved;
+          return `<div class="card">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <p class="text-2xl mb-1">${g.icon||'🎯'}</p>
+                <p class="text-white font-bold">${esc(g.name)}</p>
+                ${g.deadline?`<p class="text-slate-500 text-xs mt-0.5">Son tarih: ${g.deadline}</p>`:''}
+              </div>
+              <button onclick="DB.delGoal('${g.id}');draw()" class="text-slate-600 text-xs">✕</button>
+            </div>
+            <div class="progress-bar mb-2"><div class="progress-fill" style="width:${pct}%;background:${pct>=100?'#22c55e':'#3b82f6'}"></div></div>
+            <div class="flex justify-between text-sm mb-3">
+              <span class="text-slate-400">Biriken: <span class="text-white font-bold">${fmt(g.saved)}</span></span>
+              <span class="text-slate-400">Hedef: <span class="text-white font-bold">${fmt(g.target)}</span></span>
+            </div>
+            ${pct<100?`
+            <div class="flex gap-2">
+              <input type="number" inputmode="decimal" id="add-saved-${g.id}" placeholder="Eklenecek tutar" class="flex-1 text-sm py-2">
+              <button onclick="addToGoal('${g.id}')" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold">Ekle</button>
+            </div>`:`<p class="text-green-400 font-bold text-center py-2">🎉 Hedefe ulaşıldı!</p>`}
+          </div>`;
+        }).join('')}
+      </div>`}
+    </div>
+  </div>
+  ${navBar('goals')}
+  <div id="goal-modal" class="hide modal-overlay">
+    <div class="modal-sheet">
+      <div class="flex justify-between items-center mb-5">
+        <h3 class="text-white font-bold text-lg">Hedef Ekle</h3>
+        <button onclick="document.getElementById('goal-modal').classList.add('hide')" class="text-slate-400 text-3xl leading-none">×</button>
+      </div>
+      <div class="space-y-3">
+        <div><label class="label">Hedef Adı *</label><input id="g-name" type="text" placeholder="Yaz tatili, araba, acil fon..."></div>
+        <div><label class="label">Simge</label>
+          <div class="flex flex-wrap gap-2">
+            ${['✈️','🚗','🏖️','💻','📱','🏠','💍','🎓','💊','🎁','💰','🌟'].map(ic=>`
+            <button type="button" class="text-2xl p-2 rounded-xl bg-slate-700/50 active:bg-slate-600" onclick="selectIcon(this,'${ic}')">${ic}</button>`).join('')}
+          </div>
+          <input type="hidden" id="g-icon" value="🎯">
+        </div>
+        <div><label class="label">Hedef Tutar (₺) *</label><input id="g-target" type="number" inputmode="decimal" placeholder="0"></div>
+        <div><label class="label">Mevcut Birikim (₺)</label><input id="g-saved" type="number" inputmode="decimal" placeholder="0"></div>
+        <div><label class="label">Son Tarih (opsiyonel)</label><input id="g-deadline" type="date"></div>
+        <button onclick="saveGoal()" class="btn-green mt-2">Kaydet</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function selectIcon(el,icon){
+  document.getElementById('g-icon').value=icon;
+  document.querySelectorAll('#goal-modal button[type="button"]').forEach(b=>b.style.background='');
+  el.style.background='#166534';
+}
+
+function showGoalModal(){
+  document.getElementById('goal-modal').classList.remove('hide');
+}
+
+function saveGoal(){
+  const name=document.getElementById('g-name').value.trim();
+  const target=parseFloat(document.getElementById('g-target').value);
+  if(!name||!target){ alert('Ad ve hedef tutar zorunludur.'); return; }
+  DB.addGoal({
+    name, target,
+    saved:parseFloat(document.getElementById('g-saved').value)||0,
+    icon:document.getElementById('g-icon').value||'🎯',
+    deadline:document.getElementById('g-deadline').value||'',
+  });
+  document.getElementById('goal-modal').classList.add('hide');
+  draw();
+}
+
+function addToGoal(id){
+  const input=document.getElementById('add-saved-'+id);
+  const val=parseFloat(input.value);
+  if(!val||val<=0){ alert('Geçerli bir tutar girin.'); return; }
+  const g=DB.goals().find(g=>g.id===id);
+  if(!g) return;
+  DB.updateGoal(id,{saved:g.saved+val});
+  draw();
+}
+
+function afterDraw(){}
+
+DB.init();
+draw();
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
+{
+  "name": "Cüzdan - Harcama Takip",
+  "short_name": "Cüzdan",
+  "start_url": "/cuzdan/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "icon.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
+const CACHE = 'cuzdan-v1';
+const ASSETS = [
+  '/cuzdan/index.html',
+  '/cuzdan/manifest.json',
+];
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', e => {
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      caches.match('/cuzdan/index.html').then(cached => cached || fetch(e.request))
+    );
+    return;
+  }
+  e.respondWith(
+    caches.match(e.request).then(cached => cached || fetch(e.request))
+  );
+});
