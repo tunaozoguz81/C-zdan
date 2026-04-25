@@ -1,7 +1,7 @@
 {
   "name": "Cüzdan - Harcama Takip",
   "short_name": "Cüzdan",
-  "start_url": "/C-zdan/",
+  "start_url": "/cuzdan/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
