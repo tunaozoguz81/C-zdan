@@ -210,6 +210,17 @@ function vDashboard(){
           </div>`).join('')}
         <button onclick="go('expenses')" class="text-green-400 text-xs mt-2 underline">Tümünü gör →</button>
       </div>`:''}
+
+      <div class="card">
+        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold mb-3">Yedekleme</p>
+        <div class="flex gap-2">
+          <button onclick="exportData()" class="flex-1 py-2.5 rounded-xl bg-slate-700/60 text-white text-sm font-semibold active:opacity-70">📤 Dışa Aktar</button>
+          <label class="flex-1 py-2.5 rounded-xl bg-slate-700/60 text-white text-sm font-semibold text-center cursor-pointer active:opacity-70">
+            📥 İçe Aktar
+            <input type="file" accept=".json" onchange="importData(this)" class="hide">
+          </label>
+        </div>
+      </div>
     </div>
   </div>
   ${navBar('dashboard')}
@@ -523,6 +534,37 @@ function addToGoal(id){
 }
 
 function afterDraw(){}
+
+function exportData(){
+  const data={
+    expenses:DB._g('cz_expenses'),
+    incomes:DB._g('cz_incomes'),
+    debts:DB._g('cz_debts'),
+    goals:DB._g('cz_goals'),
+    date:new Date().toISOString()
+  };
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+  a.download=`cuzdan-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+}
+
+function importData(input){
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d.expenses) DB._s('cz_expenses',d.expenses);
+      if(d.incomes)  DB._s('cz_incomes',d.incomes);
+      if(d.debts)    DB._s('cz_debts',d.debts);
+      if(d.goals)    DB._s('cz_goals',d.goals);
+      alert('Veriler başarıyla içe aktarıldı.');
+      draw();
+    }catch{ alert('Geçersiz dosya.'); }
+  };
+  r.readAsText(file);
+}
 
 DB.init();
 draw();
