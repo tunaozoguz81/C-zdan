@@ -320,7 +320,8 @@ function vExpenses(){
               <span class="text-xl">${e.cat.split(' ')[0]}</span>
               <div>
                 <p class="text-white text-sm">${esc(e.cat.split(' ').slice(1).join(' '))}</p>
-                <p class="text-slate-500 text-xs">${e.note?esc(e.note)+' · ':''>${e.date}</p>
+                ${e.note?esc(e.note)+' · ':''} ${e.date}
+
               </div>
             </div>
             <div class="flex items-center gap-3">
