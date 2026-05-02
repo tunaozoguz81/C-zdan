@@ -105,10 +105,12 @@ function thisMonth(){
 function vDashboard(){
   const now=new Date();
   const mon=thisMonth();
-  const expenses=DB.expenses().filter(e=>e.date.startsWith(mon));
-  const incomes=DB.incomes().filter(e=>e.date.startsWith(mon));
+  const expenses=DB.expenses();
+  const incomes=DB.incomes();
   const totalExp=expenses.reduce((s,e)=>s+e.amount,0);
   const totalInc=incomes.reduce((s,e)=>s+e.amount,0);
+  const monthExp=expenses.filter(e=>e.date.startsWith(mon)).reduce((s,e)=>s+e.amount,0);
+  const monthInc=incomes.filter(e=>e.date.startsWith(mon)).reduce((s,e)=>s+e.amount,0);
   const balance=totalInc-totalExp;
   const goals=DB.goals();
   const debts=DB.debts();
@@ -131,11 +133,15 @@ function vDashboard(){
       </div>
 
       <div class="card" style="background:linear-gradient(135deg,${balance>=0?'#052e16,#14532d':'#450a0a,#7f1d1d'});">
-        <p class="text-slate-300 text-sm mb-1">Bu ay bakiye</p>
+        <p class="text-slate-300 text-sm mb-1">Toplam Bakiye</p>
         <p class="text-3xl font-black ${balance>=0?'text-green-300':'text-red-300'}">${fmt(balance)}</p>
         <div class="flex gap-4 mt-3">
-          <div><p class="text-slate-400 text-xs">Gelir</p><p class="text-green-400 font-bold">${fmt(totalInc)}</p></div>
-          <div><p class="text-slate-400 text-xs">Gider</p><p class="text-red-400 font-bold">${fmt(totalExp)}</p></div>
+          <div><p class="text-slate-400 text-xs">Toplam Gelir</p><p class="text-green-400 font-bold">${fmt(totalInc)}</p></div>
+          <div><p class="text-slate-400 text-xs">Toplam Gider</p><p class="text-red-400 font-bold">${fmt(totalExp)}</p></div>
+        </div>
+        <div class="border-t border-white/10 mt-3 pt-3 flex gap-4">
+          <div><p class="text-slate-400 text-xs">Bu ay gelir</p><p class="text-green-300 text-sm font-semibold">${fmt(monthInc)}</p></div>
+          <div><p class="text-slate-400 text-xs">Bu ay gider</p><p class="text-red-300 text-sm font-semibold">${fmt(monthExp)}</p></div>
         </div>
       </div>
 
